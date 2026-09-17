@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Fluid Reader</string>
+
+    <string name="guidance_center_cup">Center the cup in frame</string>
+    <string name="guidance_move_side">Move camera to a side view</string>
+    <string name="guidance_hold_steady">Hold steady…</string>
+    <string name="guidance_ready">Measuring</string>
+    <string name="guidance_too_close_angle">Move camera closer to the side</string>
+    <string name="guidance_not_detected">16 oz cup not detected</string>
+    <string name="guidance_unavailable">Measurement unavailable</string>
+    <string name="guidance_unavailable_hint">Move camera to a clearer side view</string>
+
+    <string name="confidence_high">HIGH CONFIDENCE</string>
+    <string name="confidence_medium">MEDIUM CONFIDENCE</string>
+    <string name="confidence_low">LOW CONFIDENCE</string>
+
+    <string name="label_range">Likely range</string>
+    <string name="action_settings">Settings</string>
+    <string name="action_manual_adjust">Adjust manually</string>
+    <string name="action_done">Done</string>
+
+    <string name="settings_title">Settings</string>
+    <string name="settings_cup_profile">Cup profile</string>
+    <string name="settings_calibration">Calibration</string>
+    <string name="settings_units">Units</string>
+    <string name="settings_confidence_threshold">Confidence threshold</string>
+    <string name="settings_show_overlay">Show measurement overlay</string>
+    <string name="settings_about">About</string>
+    <string name="settings_debug_mode">Debug / test mode</string>
+
+    <string name="calibration_title">Calibration</string>
+    <string name="calibration_add_point">Add calibration point</string>
+    <string name="calibration_height_mm">Liquid height (mm)</string>
+    <string name="calibration_volume_oz">Known volume (fl oz)</string>
+    <string name="calibration_top_diameter">Top inside diameter (mm)</string>
+    <string name="calibration_bottom_diameter">Bottom inside diameter (mm)</string>
+    <string name="calibration_total_height">Total interior height (mm)</string>
+    <string name="calibration_reset">Reset to defaults</string>
+
+    <string name="about_title">About</string>
+
+    <string name="debug_title">Debug / Test Mode</string>
+    <string name="debug_load_image">Load reference photo…</string>
+</resources>
