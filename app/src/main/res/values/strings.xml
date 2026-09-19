@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Fluid Reader</string>
+    <string name="app_name">Overpour Calculator</string>
 
     <string name="guidance_center_cup">Center the cup in frame</string>
     <string name="guidance_move_side">Move camera to a side view</string>

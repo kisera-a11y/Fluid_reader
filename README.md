@@ -1,4 +1,4 @@
-# Fluid Reader
+# Overpour Calculator
 
 Point your phone's camera at a clear 16 oz Solo-style plastic cup and get a live, on-device
 estimate of how much liquid is inside — e.g. **"≈ 8.3 oz"**, **"Likely range: 7.8-8.8 oz"**,
