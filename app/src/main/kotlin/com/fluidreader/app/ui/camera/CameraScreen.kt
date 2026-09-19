@@ -5,6 +5,17 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.view.PreviewView
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,14 +25,17 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -40,13 +54,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.fluidreader.app.R
@@ -55,9 +70,14 @@ import com.fluidreader.app.camera.FrameAnalyzer
 import com.fluidreader.app.measurement.DisplayState
 import com.fluidreader.app.measurement.MeasurementUiState
 import com.fluidreader.app.measurement.MeasurementViewModel
+import com.fluidreader.app.ui.theme.AquaPrimary
 import com.fluidreader.app.ui.theme.BadRed
+import com.fluidreader.app.ui.theme.ExtraShapes
 import com.fluidreader.app.ui.theme.GoodGreen
+import com.fluidreader.app.ui.theme.Ink3
 import com.fluidreader.app.ui.theme.SurfaceOverlay
+import com.fluidreader.app.ui.theme.TextPrimary
+import com.fluidreader.app.ui.theme.TextSecondary
 import com.fluidreader.app.ui.theme.WarnAmber
 import com.fluidreader.core.measurement.ConfidenceLevel
 
@@ -96,13 +116,17 @@ private fun PermissionRequest(onRequest: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
+        Icon(Icons.Filled.WaterDrop, contentDescription = null, tint = AquaPrimary, modifier = Modifier.size(48.dp))
+        Spacer(Modifier.height(16.dp))
         Text(
             "Camera access is needed to measure liquid in a cup.",
-            color = Color.White,
+            color = TextPrimary,
             style = MaterialTheme.typography.bodyLarge,
         )
-        Spacer(Modifier.height(16.dp))
-        Button(onClick = onRequest) { Text("Grant camera permission") }
+        Spacer(Modifier.height(20.dp))
+        Button(onClick = onRequest, colors = ButtonDefaults.buttonColors(containerColor = AquaPrimary)) {
+            Text("Grant camera permission", color = Color.Black)
+        }
     }
 }
 
@@ -142,38 +166,58 @@ private fun CameraContent(viewModel: MeasurementViewModel, onOpenSettings: () ->
 
         // Top bar
         Row(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Surface(color = SurfaceOverlay, shape = RoundedCornerShape(12.dp)) {
-                Text(
-                    stringResource(R.string.app_name),
-                    color = Color.White,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                    style = MaterialTheme.typography.labelLarge,
-                )
+            Surface(color = SurfaceOverlay, shape = ExtraShapes.Pill) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                ) {
+                    Icon(Icons.Filled.WaterDrop, contentDescription = null, tint = AquaPrimary, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        stringResource(R.string.app_name),
+                        color = TextPrimary,
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                }
             }
             IconButton(
                 onClick = onOpenSettings,
-                modifier = Modifier.background(SurfaceOverlay, RoundedCornerShape(50)),
+                modifier = Modifier.background(SurfaceOverlay, ExtraShapes.Pill),
             ) {
-                Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.action_settings), tint = Color.White)
+                Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.action_settings), tint = TextPrimary)
             }
         }
 
-        // Guidance banner
-        uiState.displayState.primaryGuidanceRes()?.let { guidanceRes ->
-            Column(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 72.dp)
-                    .background(SurfaceOverlay, RoundedCornerShape(12.dp))
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(stringResource(guidanceRes), color = Color.White, style = MaterialTheme.typography.titleMedium)
-                uiState.displayState.secondaryGuidanceRes()?.let {
-                    Text(stringResource(it), color = Color.White.copy(alpha = 0.8f), style = MaterialTheme.typography.bodySmall)
+        // Guidance banner. The last non-null guidance state is cached so the exit animation
+        // fades the previous message away instead of snapping straight to blank content.
+        val guidanceRes = uiState.displayState.primaryGuidanceRes()
+        var lastGuidanceState by remember { mutableStateOf(uiState.displayState) }
+        if (guidanceRes != null) lastGuidanceState = uiState.displayState
+
+        AnimatedVisibility(
+            visible = guidanceRes != null,
+            modifier = Modifier.align(Alignment.TopCenter),
+            enter = fadeIn(tween(200)) + slideInVertically(tween(200)) { -it / 2 },
+            exit = fadeOut(tween(150)) + slideOutVertically(tween(150)) { -it / 2 },
+        ) {
+            val shownRes = lastGuidanceState.primaryGuidanceRes()
+            if (shownRes != null) {
+                Column(
+                    modifier = Modifier
+                        .statusBarsPadding()
+                        .padding(top = 64.dp)
+                        .background(SurfaceOverlay, RoundedCornerShape(14.dp))
+                        .padding(horizontal = 18.dp, vertical = 12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(stringResource(shownRes), color = TextPrimary, style = MaterialTheme.typography.titleMedium)
+                    lastGuidanceState.secondaryGuidanceRes()?.let {
+                        Text(stringResource(it), color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+                    }
                 }
             }
         }
@@ -206,47 +250,71 @@ private fun BottomPanel(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(SurfaceOverlay, RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
-            .padding(20.dp),
+            .background(SurfaceOverlay, ExtraShapes.BottomPanel)
+            // The background above extends full-bleed to the bottom of the screen (this
+            // padding is inside it), but the actual content - critically, the manual-adjust
+            // button - is pushed up above the system navigation bar / gesture handle so it's
+            // always reachable, on both 3-button and gesture-nav devices.
+            .navigationBarsPadding()
+            .padding(horizontal = 20.dp, vertical = 18.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        // Grabber handle - reinforces the "bottom sheet" affordance.
+        Box(
+            modifier = Modifier
+                .size(width = 36.dp, height = 4.dp)
+                .background(Ink3, RoundedCornerShape(2.dp)),
+        )
+        Spacer(Modifier.height(16.dp))
+
         if (blocked) {
             Text(
                 stringResource(R.string.guidance_unavailable),
-                color = Color.White,
+                color = TextPrimary,
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
             )
         } else {
-            Text(
-                "≈ ${uiState.displayVolumeText}",
-                color = Color.White,
-                style = MaterialTheme.typography.displaySmall,
-                fontWeight = FontWeight.Bold,
-            )
-            Spacer(Modifier.height(4.dp))
+            AnimatedContent(
+                targetState = uiState.displayVolumeText,
+                transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(120)) },
+                label = "volume",
+            ) { volumeText ->
+                Text(
+                    "≈ $volumeText",
+                    color = AquaPrimary,
+                    style = MaterialTheme.typography.displaySmall,
+                )
+            }
+            Spacer(Modifier.height(2.dp))
             Text(
                 "${stringResource(R.string.label_range)}: ${uiState.displayRangeText}",
-                color = Color.White.copy(alpha = 0.85f),
+                color = TextSecondary,
                 style = MaterialTheme.typography.bodyMedium,
             )
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(10.dp))
             ConfidenceBadge(uiState.confidenceLevel, dimmed = uiState.displayState == DisplayState.STABILIZING)
         }
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(18.dp))
 
         if (uiState.manualOverrideEnabled) {
             Button(
                 onClick = onToggleManual,
+                shape = ExtraShapes.Pill,
                 colors = ButtonDefaults.buttonColors(containerColor = GoodGreen),
             ) {
-                Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                Icon(Icons.Filled.Check, contentDescription = null, tint = Color.Black, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.action_done))
+                Text(stringResource(R.string.action_done), color = Color.Black)
             }
         } else {
-            OutlinedButton(onClick = onToggleManual) {
+            OutlinedButton(
+                onClick = onToggleManual,
+                shape = ExtraShapes.Pill,
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = AquaPrimary),
+                border = BorderStroke(1.dp, AquaPrimary),
+            ) {
                 Icon(Icons.Filled.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
                 Text(stringResource(R.string.action_manual_adjust))
@@ -257,21 +325,34 @@ private fun BottomPanel(
 
 @Composable
 private fun ConfidenceBadge(level: ConfidenceLevel, dimmed: Boolean = false) {
-    val color = when (level) {
+    val targetColor = when (level) {
         ConfidenceLevel.HIGH -> GoodGreen
         ConfidenceLevel.MEDIUM -> WarnAmber
         ConfidenceLevel.LOW -> BadRed
     }
+    val color by animateColorAsState(targetColor, tween(300), label = "confidenceColor")
+    val emphasis by animateFloatAsState(if (dimmed) 0f else 1f, tween(300), label = "confidenceEmphasis")
+
     Surface(
-        color = color.copy(alpha = if (dimmed) 0.35f else 0.85f),
-        shape = RoundedCornerShape(50),
+        color = color.copy(alpha = 0.16f + 0.68f * emphasis),
+        shape = ExtraShapes.Pill,
     ) {
-        Text(
-            stringResource(level.labelRes()),
-            color = Color.Black,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold,
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-        )
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(7.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(color),
+            )
+            Spacer(Modifier.width(7.dp))
+            Text(
+                stringResource(level.labelRes()),
+                color = color,
+                style = MaterialTheme.typography.labelMedium,
+            )
+        }
     }
 }

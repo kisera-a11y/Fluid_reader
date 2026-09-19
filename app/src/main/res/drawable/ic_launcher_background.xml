@@ -5,6 +5,14 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
     <path
-        android:fillColor="#1B1F23"
+        android:fillColor="#0A0D0F"
         android:pathData="M0,0h108v108h-108z" />
+    <!-- Soft radial-style vignette approximated with a few translucent overlapping circles,
+         so the flat background reads with a bit of depth without needing gradient XML. -->
+    <path
+        android:fillColor="#1122D3EE"
+        android:pathData="M54,54 m-46,0 a46,46 0,1 1,92 0 a46,46 0,1 1,-92 0" />
+    <path
+        android:fillColor="#0A0D0F"
+        android:pathData="M54,54 m-38,0 a38,38 0,1 1,76 0 a38,38 0,1 1,-76 0" />
 </vector>

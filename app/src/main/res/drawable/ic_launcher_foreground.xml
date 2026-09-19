@@ -4,20 +4,38 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Simple tapered-cup glyph with a liquid-level line, echoing the app's
-         core measurement concept. -->
+    <!-- Liquid fill (lower portion of the tapered cup). -->
+    <path
+        android:fillColor="#3322D3EE"
+        android:pathData="M40.75,57.3 L67.25,57.3 L65,78 L43,78 Z" />
+
+    <!-- Cup wall outline - a tapered frustum silhouette, the app's core visual idea. -->
     <path
         android:fillColor="#00000000"
-        android:strokeColor="#4FC3F7"
-        android:strokeWidth="4"
-        android:pathData="M38,34 L70,34 L64,80 L44,80 Z" />
-    <path
-        android:fillColor="#4FC3F7"
-        android:fillAlpha="0.55"
-        android:pathData="M46,62 L62,62 L58.6,80 L49.4,80 Z" />
+        android:strokeColor="#22D3EE"
+        android:strokeWidth="3.4"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M38,32 L43,78 L65,78 L70,32" />
+
+    <!-- Rim ellipse for depth. -->
     <path
         android:fillColor="#00000000"
-        android:strokeColor="#E1F5FE"
-        android:strokeWidth="2.5"
-        android:pathData="M45,62 L63,62" />
+        android:strokeColor="#22D3EE"
+        android:strokeWidth="3.4"
+        android:pathData="M38,32 a16,4 0,1 0,32 0 a16,4 0,1 0,-32 0" />
+
+    <!-- Liquid surface line. -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#E9FDFF"
+        android:strokeWidth="2.6"
+        android:strokeLineCap="round"
+        android:pathData="M40.75,57.3 L67.25,57.3" />
+
+    <!-- Glossy highlight streak. -->
+    <path
+        android:fillColor="#33FFFFFF"
+        android:strokeColor="#00000000"
+        android:pathData="M45,40 L47,40 L45.5,68 L43.5,68 Z" />
 </vector>
