@@ -31,9 +31,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import android.widget.Toast
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.LocalBar
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material3.Button
@@ -67,13 +69,16 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.fluidreader.app.R
 import com.fluidreader.app.camera.CameraController
 import com.fluidreader.app.camera.FrameAnalyzer
+import com.fluidreader.app.drinklog.DrinkLogViewModel
 import com.fluidreader.app.measurement.DisplayState
 import com.fluidreader.app.measurement.MeasurementUiState
 import com.fluidreader.app.measurement.MeasurementViewModel
+import com.fluidreader.app.ui.drinklog.LogDrinkDialog
 import com.fluidreader.app.ui.theme.AquaPrimary
 import com.fluidreader.app.ui.theme.BadRed
 import com.fluidreader.app.ui.theme.ExtraShapes
 import com.fluidreader.app.ui.theme.GoodGreen
+import com.fluidreader.app.ui.theme.Ink0
 import com.fluidreader.app.ui.theme.Ink3
 import com.fluidreader.app.ui.theme.SurfaceOverlay
 import com.fluidreader.app.ui.theme.TextPrimary
@@ -84,6 +89,7 @@ import com.fluidreader.core.measurement.ConfidenceLevel
 @Composable
 fun CameraScreen(
     onOpenSettings: () -> Unit,
+    onOpenDrinkLog: () -> Unit,
     viewModel: MeasurementViewModel = viewModel(),
 ) {
     val context = LocalContext.current
@@ -102,7 +108,7 @@ fun CameraScreen(
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         if (hasCameraPermission) {
-            CameraContent(viewModel = viewModel, onOpenSettings = onOpenSettings)
+            CameraContent(viewModel = viewModel, onOpenSettings = onOpenSettings, onOpenDrinkLog = onOpenDrinkLog)
         } else {
             PermissionRequest(onRequest = { permissionLauncher.launch(Manifest.permission.CAMERA) })
         }
@@ -131,10 +137,17 @@ private fun PermissionRequest(onRequest: () -> Unit) {
 }
 
 @Composable
-private fun CameraContent(viewModel: MeasurementViewModel, onOpenSettings: () -> Unit) {
+private fun CameraContent(
+    viewModel: MeasurementViewModel,
+    onOpenSettings: () -> Unit,
+    onOpenDrinkLog: () -> Unit,
+    drinkLogViewModel: DrinkLogViewModel = viewModel(),
+) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val uiState by viewModel.uiState.collectAsState()
+    val drinkLogEntries by drinkLogViewModel.entries.collectAsState()
+    var showLogDialog by remember { mutableStateOf(false) }
 
     val cameraController = remember { CameraController(context) }
     val previewView = remember {
@@ -184,11 +197,20 @@ private fun CameraContent(viewModel: MeasurementViewModel, onOpenSettings: () ->
                     )
                 }
             }
-            IconButton(
-                onClick = onOpenSettings,
-                modifier = Modifier.background(SurfaceOverlay, ExtraShapes.Pill),
-            ) {
-                Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.action_settings), tint = TextPrimary)
+            Row {
+                IconButton(
+                    onClick = onOpenDrinkLog,
+                    modifier = Modifier.background(SurfaceOverlay, ExtraShapes.Pill),
+                ) {
+                    Icon(Icons.Filled.LocalBar, contentDescription = stringResource(R.string.action_drink_log), tint = TextPrimary)
+                }
+                Spacer(Modifier.width(8.dp))
+                IconButton(
+                    onClick = onOpenSettings,
+                    modifier = Modifier.background(SurfaceOverlay, ExtraShapes.Pill),
+                ) {
+                    Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.action_settings), tint = TextPrimary)
+                }
             }
         }
 
@@ -227,7 +249,22 @@ private fun CameraContent(viewModel: MeasurementViewModel, onOpenSettings: () ->
             onToggleManual = {
                 if (uiState.manualOverrideEnabled) viewModel.exitManualOverride() else viewModel.enterManualOverride()
             },
+            onLogDrink = { showLogDialog = true },
             modifier = Modifier.align(Alignment.BottomCenter),
+        )
+    }
+
+    if (showLogDialog) {
+        LogDrinkDialog(
+            currentVolumeOz = uiState.volumeOz,
+            units = uiState.units,
+            existingNames = drinkLogEntries.map { it.name },
+            onDismiss = { showLogDialog = false },
+            onConfirm = { name ->
+                drinkLogViewModel.logPour(name, uiState.volumeOz)
+                showLogDialog = false
+                Toast.makeText(context, "Logged ${uiState.units.format(uiState.volumeOz)} → $name", Toast.LENGTH_SHORT).show()
+            },
         )
     }
 }
@@ -236,6 +273,7 @@ private fun CameraContent(viewModel: MeasurementViewModel, onOpenSettings: () ->
 private fun BottomPanel(
     uiState: MeasurementUiState,
     onToggleManual: () -> Unit,
+    onLogDrink: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val blocked = uiState.displayState in setOf(
@@ -298,26 +336,40 @@ private fun BottomPanel(
 
         Spacer(Modifier.height(18.dp))
 
-        if (uiState.manualOverrideEnabled) {
-            Button(
-                onClick = onToggleManual,
-                shape = ExtraShapes.Pill,
-                colors = ButtonDefaults.buttonColors(containerColor = GoodGreen),
-            ) {
-                Icon(Icons.Filled.Check, contentDescription = null, tint = Color.Black, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.action_done), color = Color.Black)
-            }
-        } else {
-            OutlinedButton(
-                onClick = onToggleManual,
-                shape = ExtraShapes.Pill,
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = AquaPrimary),
-                border = BorderStroke(1.dp, AquaPrimary),
-            ) {
-                Icon(Icons.Filled.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.action_manual_adjust))
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (uiState.manualOverrideEnabled) {
+                Button(
+                    onClick = onToggleManual,
+                    shape = ExtraShapes.Pill,
+                    colors = ButtonDefaults.buttonColors(containerColor = GoodGreen),
+                ) {
+                    Icon(Icons.Filled.Check, contentDescription = null, tint = Color.Black, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.action_done), color = Color.Black)
+                }
+            } else {
+                OutlinedButton(
+                    onClick = onToggleManual,
+                    shape = ExtraShapes.Pill,
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = AquaPrimary),
+                    border = BorderStroke(1.dp, AquaPrimary),
+                ) {
+                    Icon(Icons.Filled.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.action_manual_adjust))
+                }
+
+                if (!blocked) {
+                    Button(
+                        onClick = onLogDrink,
+                        shape = ExtraShapes.Pill,
+                        colors = ButtonDefaults.buttonColors(containerColor = AquaPrimary),
+                    ) {
+                        Icon(Icons.Filled.LocalBar, contentDescription = null, tint = Ink0, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.action_log_drink), color = Ink0)
+                    }
+                }
             }
         }
     }

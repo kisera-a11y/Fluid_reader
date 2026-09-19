@@ -170,9 +170,26 @@ Debug/Test screen) photo-library access to load reference images.
 4. If the automatic reading looks off, tap **Adjust manually**, drag the rim/base/liquid lines
    to match what you see, and the ounce reading recalculates immediately. Tap **Done** to
    resume automatic measurement.
-5. Tap the gear icon for **Settings**: units (oz/mL), cup profile, confidence threshold,
+5. Once a reading is ready, tap **Log drink** to add it to tonight's drink log: type a name
+   (e.g. "Yuengling") or tap the mic icon to say it, then confirm. Logging the same name again
+   later adds to its running total rather than creating a duplicate row - tap it from the
+   suggestion chips shown in the dialog to avoid retyping/typos.
+6. Tap the glass icon (top bar) to open **Drink log**: a running table of everything logged
+   tonight (name, total poured, number of pours), plus a grand total. Swipe/tap the trash icon
+   to remove a single entry, or the X in the top bar to clear the whole log - both ask for
+   confirmation first, and nothing is ever deleted automatically.
+7. Tap the gear icon for **Settings**: units (oz/mL), cup profile, confidence threshold,
    overlay visibility, and (after enabling "Developer options") **Calibration** and
    **Debug / Test mode**.
+
+### Drink log
+
+Designed for tracking a night's worth of drinks (comfortably handles dozens of entries, no
+hard cap). Each named entry accumulates every pour logged under that name (case-insensitive,
+so "IPA" and "ipa" merge) into one running total + pour count, rather than listing every pour
+as its own row. The log is stored on-device (`DrinkLogStore`, Preferences DataStore) and
+persists across app restarts - it is only ever cleared by the explicit per-entry delete or
+"clear all" action in the Drink log screen, both of which require confirmation.
 
 ### Calibration mode
 

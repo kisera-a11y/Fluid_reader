@@ -19,6 +19,8 @@
     <string name="action_settings">Settings</string>
     <string name="action_manual_adjust">Adjust manually</string>
     <string name="action_done">Done</string>
+    <string name="action_log_drink">Log drink</string>
+    <string name="action_drink_log">Drink log</string>
 
     <string name="settings_title">Settings</string>
     <string name="settings_cup_profile">Cup profile</string>

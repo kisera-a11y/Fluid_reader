@@ -18,6 +18,16 @@
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
 
+    <!-- Required on Android 11+ (package-visibility restrictions) so the Log Drink dialog's
+         mic button can correctly detect whether a speech-recognition activity is installed
+         before launching RecognizerIntent.ACTION_RECOGNIZE_SPEECH - without this, resolving
+         the intent can silently return null even when voice input is actually available. -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
+        </intent>
+    </queries>
+
     <application
         android:name=".FluidReaderApp"
         android:allowBackup="true"
