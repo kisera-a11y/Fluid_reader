@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -140,22 +139,12 @@ fun CalibrationScreen(onBack: () -> Unit) {
                 }
             }
 
-            Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                OutlinedTextField(
-                    value = newPointHeight,
-                    onValueChange = { newPointHeight = it },
-                    label = { Text(stringResource(R.string.calibration_height_mm)) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    modifier = Modifier.weight(1f).padding(end = 8.dp),
-                )
-                OutlinedTextField(
-                    value = newPointVolume,
-                    onValueChange = { newPointVolume = it },
-                    label = { Text(stringResource(R.string.calibration_volume_oz)) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    modifier = Modifier.weight(1f),
-                )
-            }
+            NumberField(
+                stringResource(R.string.calibration_height_mm),
+                newPointHeight,
+                modifier = Modifier.padding(top = 8.dp),
+            ) { newPointHeight = it }
+            NumberField(stringResource(R.string.calibration_volume_oz), newPointVolume) { newPointVolume = it }
             Button(
                 onClick = {
                     val h = newPointHeight.toDoubleOrNull()
@@ -183,12 +172,12 @@ fun CalibrationScreen(onBack: () -> Unit) {
 }
 
 @Composable
-private fun NumberField(label: String, value: String, onChange: (String) -> Unit) {
+private fun NumberField(label: String, value: String, modifier: Modifier = Modifier, onChange: (String) -> Unit) {
     OutlinedTextField(
         value = value,
         onValueChange = onChange,
         label = { Text(label) },
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        modifier = modifier.fillMaxWidth().padding(vertical = 4.dp),
     )
 }
