@@ -86,6 +86,10 @@ object CupBoundaryDetector {
             rightEdge = rightEdge,
             shapeMatchScore = shapeMatchScore,
             edgeQuality = edgeQuality,
+            topLeftX = averageX(leftEdge, 0, edgeSampleRows),
+            topRightX = averageX(rightEdge, 0, edgeSampleRows),
+            bottomLeftX = averageX(leftEdge, rowCount - edgeSampleRows, rowCount),
+            bottomRightX = averageX(rightEdge, rowCount - edgeSampleRows, rowCount),
         )
     }
 
@@ -99,19 +103,37 @@ object CupBoundaryDetector {
         return if (count == 0) 0.0 else sum / count
     }
 
+    private fun averageX(edge: IntArray, from: Int, to: Int): Double {
+        var sum = 0.0
+        var count = 0
+        for (i in from until to) {
+            sum += edge[i]
+            count++
+        }
+        return if (count == 0) 0.0 else sum / count
+    }
+
     /**
      * Scans from [fromX] toward [toX] (step direction given by the sign of [stepIn], which
-     * must be +1 or -1) for the first strong vertical edge (a cup wall against its background).
-     * Falls back to [fromX] if nothing crosses the threshold, so callers always get a usable
-     * (if less precise) boundary rather than a crash.
+     * must be +1 or -1) for the *strongest* vertical edge in range - the cup wall against its
+     * background - rather than just the first pixel to cross the threshold. A "first crossing"
+     * scan is vulnerable to a single noisy/reflective pixel encountered early in the scan
+     * winning over the true (stronger) wall edge further in; taking the max is more robust to
+     * that kind of spurious trigger. Falls back to [fromX] if nothing in range clears the
+     * threshold, so callers always get a usable (if less precise) boundary rather than a crash.
      */
     private fun findWallEdge(frame: LumaFrame, y: Int, fromX: Int, toX: Int, stepIn: Int): Int {
         var x = fromX
+        var bestX = fromX
+        var bestMagnitude = 0
         while (if (stepIn > 0) x < toX else x > toX) {
             val gx = abs(EdgeDetector.sobelGx(frame, x, y))
-            if (gx > WALL_EDGE_THRESHOLD) return x
+            if (gx > bestMagnitude) {
+                bestMagnitude = gx
+                bestX = x
+            }
             x += stepIn
         }
-        return fromX
+        return if (bestMagnitude > WALL_EDGE_THRESHOLD) bestX else fromX
     }
 }

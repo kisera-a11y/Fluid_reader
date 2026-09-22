@@ -28,6 +28,9 @@ class CoordinateMapper(
 
     fun map(x: Int, y: Int): Offset = Offset(x * scale + offsetX, y * scale + offsetY)
 
+    /** Sub-pixel variant, for drawing smoothly-animated (non-integer) overlay coordinates. */
+    fun map(x: Float, y: Float): Offset = Offset(x * scale + offsetX, y * scale + offsetY)
+
     /** Inverse of [map]'s Y axis: a screen Y coordinate -> the corresponding frame row. */
     fun screenYToFrameY(screenY: Float): Int =
         (((screenY - offsetY) / scale).toInt()).coerceIn(0, (frameHeight - 1).coerceAtLeast(0))

@@ -24,6 +24,16 @@ data class CupBoundary(
     val shapeMatchScore: Double,
     /** How sharp/consistent the detected rim + base edges were (0..1). */
     val edgeQuality: Double,
+    /**
+     * Wall x-coordinates at the rim/base, each averaged over several rows (same rows used for
+     * [shapeMatchScore]) rather than a single noisy row - the four corners of the cup's
+     * straight-sided silhouette, used to draw a clean trapezoid outline instead of a jagged
+     * per-row line.
+     */
+    val topLeftX: Double,
+    val topRightX: Double,
+    val bottomLeftX: Double,
+    val bottomRightX: Double,
 ) {
     fun leftAt(y: Int): Int = leftEdge.getOrElse((y - rimY).coerceIn(0, leftEdge.size - 1)) { leftEdge.first() }
     fun rightAt(y: Int): Int = rightEdge.getOrElse((y - rimY).coerceIn(0, rightEdge.size - 1)) { rightEdge.first() }
