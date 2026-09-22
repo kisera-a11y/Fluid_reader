@@ -31,6 +31,10 @@ class DrinkLogViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch { store.removeEntry(name) }
     }
 
+    fun deletePour(name: String, loggedAtEpochMillis: Long) {
+        viewModelScope.launch { store.removePour(name, loggedAtEpochMillis) }
+    }
+
     fun clearAll() {
         viewModelScope.launch { store.clearAll() }
     }

@@ -53,7 +53,17 @@ object LiquidLevelDetector {
         }
 
         val scores = DoubleArray(rows.size)
-        val maxEdge = edgeEnergy.maxOrNull()?.coerceAtLeast(1.0) ?: 1.0
+        // All three cues are scored as a row-to-row *change*, not a raw per-row value. A liquid
+        // surface is a transition - the cup interior looks different above it than below it -
+        // so what should stand out is a jump in these signals, not just a locally high one.
+        // This matters most for edge energy: a structural feature molded into the cup itself
+        // (a ribbed band, a seam) produces strong but roughly *constant* edge energy across many
+        // rows, which a raw-value score would reward everywhere in that band regardless of where
+        // the liquid actually is - exactly the kind of false signal this needs to reject.
+        val maxEdgeDelta = (1 until rows.size).maxOfOrNull { i ->
+            val j = (i - DELTA_ROWS).coerceAtLeast(0)
+            abs(edgeEnergy[i] - edgeEnergy[j])
+        }?.coerceAtLeast(1.0) ?: 1.0
         val maxMeanDelta = (1 until rows.size).maxOfOrNull { i ->
             val j = (i - DELTA_ROWS).coerceAtLeast(0)
             abs(meanLuma[i] - meanLuma[j])
@@ -65,10 +75,10 @@ object LiquidLevelDetector {
 
         for (i in rows.indices) {
             val j = (i - DELTA_ROWS).coerceAtLeast(0)
+            val edgeDelta = abs(edgeEnergy[i] - edgeEnergy[j]) / maxEdgeDelta
             val meanDelta = abs(meanLuma[i] - meanLuma[j]) / maxMeanDelta
             val stdDelta = abs(stdDev[i] - stdDev[j]) / maxStdDelta
-            val edgeNorm = edgeEnergy[i] / maxEdge
-            scores[i] = edgeNorm * 0.45 + meanDelta * 0.30 + stdDelta * 0.25
+            scores[i] = edgeDelta * 0.30 + meanDelta * 0.40 + stdDelta * 0.30
         }
 
         // Ignore the first/last couple of sampled rows so a residual rim/base edge inside the
