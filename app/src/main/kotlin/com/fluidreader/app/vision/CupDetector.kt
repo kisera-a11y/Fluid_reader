@@ -22,8 +22,14 @@ import com.google.mlkit.vision.objects.defaults.ObjectDetectorOptions
 class CupDetector {
 
     private val detector: ObjectDetector by lazy {
+        // SINGLE_IMAGE_MODE, not STREAM_MODE: STREAM_MODE is built for continuous video and
+        // deliberately tracks an object across several consecutive frames before it commits
+        // to a detection, so a single standalone process() call (exactly what the Debug/Test
+        // screen does with one loaded photo, and what a freshly-created detector sees on its
+        // very first live-camera frames) can legitimately return zero results. SINGLE_IMAGE_MODE
+        // runs a full detection on every call instead, which is what both use cases need.
         val options = ObjectDetectorOptions.Builder()
-            .setDetectorMode(ObjectDetectorOptions.STREAM_MODE)
+            .setDetectorMode(ObjectDetectorOptions.SINGLE_IMAGE_MODE)
             .enableMultipleObjects()
             .build()
         ObjectDetection.getClient(options)
