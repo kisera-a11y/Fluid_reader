@@ -45,6 +45,8 @@ class MeasurementViewModel(application: Application) : AndroidViewModel(applicat
     private val smoother = TemporalSmoother()
     private val recentRawVolumes = ArrayDeque<Double>()
     private var consecutiveGoodFrames = 0
+    private var consecutiveMissedFrames = 0
+    private var hasEverMeasured = false
 
     @Volatile private var currentSettings: AppSettings = AppSettings()
     @Volatile private var currentCupProfile: CupProfile = CupProfileRegistry.SOLO_16OZ
@@ -81,7 +83,18 @@ class MeasurementViewModel(application: Application) : AndroidViewModel(applicat
         }
 
         if (result.state != PipelineState.MEASURED || result.heightFraction == null || result.boundary == null) {
+            consecutiveMissedFrames++
+            // A single flaky frame (glare, a momentary miss on the liquid line, a shaky hand)
+            // shouldn't blow away an already-good reading: that's what was making the whole
+            // display - including the Log drink button, which hides once we're not READY -
+            // flicker in and out and re-stabilize on every brief dropout. Only treat this as a
+            // real loss of tracking once misses persist past a short grace window.
+            if (hasEverMeasured && consecutiveMissedFrames <= MAX_MISS_STREAK) {
+                _uiState.update { it.copy(frameWidth = result.frameWidth, frameHeight = result.frameHeight) }
+                return
+            }
             consecutiveGoodFrames = 0
+            hasEverMeasured = false
             smoother.reset()
             recentRawVolumes.clear()
             _uiState.update {
@@ -97,6 +110,8 @@ class MeasurementViewModel(application: Application) : AndroidViewModel(applicat
             return
         }
 
+        consecutiveMissedFrames = 0
+        hasEverMeasured = true
         consecutiveGoodFrames++
         val rawVolume = VolumeCalculator.volumeOzAtFraction(currentCupProfile, result.heightFraction)
         recentRawVolumes.addLast(rawVolume)
@@ -176,6 +191,8 @@ class MeasurementViewModel(application: Application) : AndroidViewModel(applicat
 
     fun exitManualOverride() {
         consecutiveGoodFrames = 0
+        consecutiveMissedFrames = 0
+        hasEverMeasured = false
         smoother.reset()
         recentRawVolumes.clear()
         _uiState.update { it.copy(manualOverrideEnabled = false, displayState = DisplayState.STABILIZING) }
@@ -223,5 +240,9 @@ class MeasurementViewModel(application: Application) : AndroidViewModel(applicat
         private const val STABILIZE_FRAMES = 4
         private const val STABILITY_WINDOW = 6
         private const val STABILITY_SCALE_OZ = 1.2
+        // How many consecutive non-measured frames to ride out (holding the last good reading
+        // steady) before treating tracking as actually lost. At the analyzer's ~8fps cap this is
+        // roughly a one-second grace period.
+        private const val MAX_MISS_STREAK = 8
     }
 }
