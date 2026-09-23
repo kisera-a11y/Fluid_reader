@@ -68,7 +68,25 @@ object CupProfileRegistry {
         usableInteriorHeight = 133.0,
     )
 
-    val defaultProfiles: List<CupProfile> = listOf(SOLO_16OZ)
+    /**
+     * Measurements for a standard clear 16 oz glass pint/mixing glass (tumbler) - the plain
+     * cylindrical-ish glass most bars pour draft beer into. Interior dimensions are approximate
+     * manufacturer specs for the common catering-glass shape (top ~3.5in / 89mm, bottom ~2.9in /
+     * 73mm, height ~6.0in / 152mm); it tapers far less than the Solo cup, which is closer to a
+     * straight cylinder and may give the vision pipeline a more consistent wall edge to track.
+     * As with the Solo cup, use the Calibration screen to refine these for your exact glass.
+     */
+    val PINT_GLASS_16OZ = CupProfile(
+        id = "pint_glass_16oz",
+        name = "16 oz pint/mixing glass (bar tumbler)",
+        totalVolumeOz = 16.0,
+        height = 152.0,
+        topDiameter = 89.0,
+        bottomDiameter = 73.0,
+        usableInteriorHeight = 148.0,
+    )
+
+    val defaultProfiles: List<CupProfile> = listOf(SOLO_16OZ, PINT_GLASS_16OZ)
 
     fun byId(id: String): CupProfile = defaultProfiles.firstOrNull { it.id == id } ?: SOLO_16OZ
 }
