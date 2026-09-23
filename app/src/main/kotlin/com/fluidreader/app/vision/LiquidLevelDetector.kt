@@ -11,11 +11,19 @@ import kotlin.math.abs
  * that a meniscus/liquid boundary tends to produce, any one of which might be weak or absent
  * depending on the drink:
  *  - a horizontal edge (the meniscus itself, or a reflection/highlight band along it)
- *  - a step change in mean brightness (liquid vs. empty air space, or vs. background seen
- *    through an empty cup)
- *  - a step change in local texture/variance (bubbles, carbonation, refraction distortion of
- *    whatever is behind the cup, or condensation - all increase pixel-to-pixel variance right
- *    at the boundary compared to the smoother regions above/below it)
+ *  - a *sustained* step change in mean brightness (liquid vs. empty air space, or vs.
+ *    background seen through an empty cup)
+ *  - a *sustained* step change in local texture/variance (bubbles, carbonation, refraction
+ *    distortion of whatever is behind the cup, or condensation)
+ *
+ * Brightness and variance are scored as a windowed before/after step (average of several rows
+ * immediately above a candidate vs. several rows immediately below it), not a fixed small-offset
+ * delta. This is what lets it reject a thin structural feature molded into the glass itself - a
+ * grip ridge, a stacking lip, a seam - that produces a real one- or two-row edge/brightness blip
+ * but doesn't hold up as a lasting regime change: a few rows past it, things go back to matching
+ * what was above it. A genuine liquid surface doesn't revert - everything below it stays liquid
+ * all the way to the bottom of the cup - so only a real surface keeps scoring high across the
+ * whole "after" window, not just the row or two right at the transition.
  *
  * The row whose combined score stands out most from the rest of the interior's score profile
  * is taken as the liquid line; how much it stands out becomes the visibility/confidence score.
@@ -25,7 +33,7 @@ object LiquidLevelDetector {
     private const val TOP_MARGIN_FRACTION = 0.08
     private const val BOTTOM_MARGIN_FRACTION = 0.06
     private const val ROW_STEP = 2
-    private const val DELTA_ROWS = 3
+    private const val STEP_WINDOW_ROWS = 4
     private const val MIN_VISIBILITY_TO_ACCEPT = 0.18
 
     fun detect(frame: LumaFrame, boundary: CupBoundary): LiquidLevelResult {
@@ -37,6 +45,12 @@ object LiquidLevelDetector {
         }
 
         val rows = (top..bottom step ROW_STEP).toList()
+        // Every candidate row needs a full STEP_WINDOW_ROWS of real sampled context on both
+        // sides, or there's nothing to compare it against.
+        if (rows.size < STEP_WINDOW_ROWS * 2 + 3) {
+            return LiquidLevelResult(detected = false, surfaceY = boundary.bottomY, visibilityScore = 0.0)
+        }
+
         val meanLuma = DoubleArray(rows.size)
         val stdDev = DoubleArray(rows.size)
         val edgeEnergy = DoubleArray(rows.size)
@@ -52,39 +66,41 @@ object LiquidLevelDetector {
             edgeEnergy[i] = EdgeDetector.rowHorizontalEdgeEnergy(frame, y, xStart, xEnd)
         }
 
-        val scores = DoubleArray(rows.size)
-        // All three cues are scored as a row-to-row *change*, not a raw per-row value. A liquid
-        // surface is a transition - the cup interior looks different above it than below it -
-        // so what should stand out is a jump in these signals, not just a locally high one.
-        // This matters most for edge energy: a structural feature molded into the cup itself
-        // (a ribbed band, a seam) produces strong but roughly *constant* edge energy across many
-        // rows, which a raw-value score would reward everywhere in that band regardless of where
-        // the liquid actually is - exactly the kind of false signal this needs to reject.
-        val maxEdgeDelta = (1 until rows.size).maxOfOrNull { i ->
-            val j = (i - DELTA_ROWS).coerceAtLeast(0)
-            abs(edgeEnergy[i] - edgeEnergy[j])
-        }?.coerceAtLeast(1.0) ?: 1.0
-        val maxMeanDelta = (1 until rows.size).maxOfOrNull { i ->
-            val j = (i - DELTA_ROWS).coerceAtLeast(0)
-            abs(meanLuma[i] - meanLuma[j])
-        }?.coerceAtLeast(1.0) ?: 1.0
-        val maxStdDelta = (1 until rows.size).maxOfOrNull { i ->
-            val j = (i - DELTA_ROWS).coerceAtLeast(0)
-            abs(stdDev[i] - stdDev[j])
-        }?.coerceAtLeast(1.0) ?: 1.0
+        val searchStart = STEP_WINDOW_ROWS
+        val searchEnd = rows.size - STEP_WINDOW_ROWS
 
-        for (i in rows.indices) {
-            val j = (i - DELTA_ROWS).coerceAtLeast(0)
-            val edgeDelta = abs(edgeEnergy[i] - edgeEnergy[j]) / maxEdgeDelta
-            val meanDelta = abs(meanLuma[i] - meanLuma[j]) / maxMeanDelta
-            val stdDelta = abs(stdDev[i] - stdDev[j]) / maxStdDelta
-            scores[i] = edgeDelta * 0.30 + meanDelta * 0.40 + stdDelta * 0.30
+        fun stepScore(values: DoubleArray, i: Int): Double {
+            var before = 0.0
+            var after = 0.0
+            for (k in 1..STEP_WINDOW_ROWS) {
+                before += values[i - k]
+                after += values[i + k - 1]
+            }
+            return abs(after / STEP_WINDOW_ROWS - before / STEP_WINDOW_ROWS)
         }
 
-        // Ignore the first/last couple of sampled rows so a residual rim/base edge inside the
-        // margin can't masquerade as the liquid line.
-        val searchStart = minOf(2, scores.size - 1)
-        val searchEnd = maxOf(scores.size - 2, searchStart + 1)
+        val meanStep = DoubleArray(rows.size)
+        val stdStep = DoubleArray(rows.size)
+        for (i in searchStart until searchEnd) {
+            meanStep[i] = stepScore(meanLuma, i)
+            stdStep[i] = stepScore(stdDev, i)
+        }
+
+        val maxMeanStep = (searchStart until searchEnd).maxOf { meanStep[it] }.coerceAtLeast(1.0)
+        val maxStdStep = (searchStart until searchEnd).maxOf { stdStep[it] }.coerceAtLeast(1.0)
+        val maxEdge = (searchStart until searchEnd).maxOf { edgeEnergy[it] }.coerceAtLeast(1.0)
+
+        val scores = DoubleArray(rows.size)
+        for (i in searchStart until searchEnd) {
+            val meanScore = meanStep[i] / maxMeanStep
+            val stdScore = stdStep[i] / maxStdStep
+            // Edge energy stays an instantaneous per-row cue (a meniscus is a thin band), but
+            // now carries less weight than the two sustained cues so a one-row structural edge
+            // alone can't win.
+            val edgeScore = edgeEnergy[i] / maxEdge
+            scores[i] = meanScore * 0.45 + stdScore * 0.30 + edgeScore * 0.25
+        }
+
         var bestIndex = searchStart
         var bestScore = -1.0
         for (i in searchStart until searchEnd) {

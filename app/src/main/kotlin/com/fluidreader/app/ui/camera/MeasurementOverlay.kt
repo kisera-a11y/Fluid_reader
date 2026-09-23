@@ -1,5 +1,7 @@
 package com.fluidreader.app.ui.camera
 
+import android.graphics.Paint
+import android.graphics.Typeface
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -17,12 +19,16 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import com.fluidreader.app.measurement.ManualLineType
 import com.fluidreader.app.measurement.MeasurementUiState
 import com.fluidreader.app.ui.theme.BadRed
-import com.fluidreader.app.ui.theme.CupBlue
 import com.fluidreader.app.ui.theme.GoodGreen
+import com.fluidreader.app.ui.theme.ManualBase
+import com.fluidreader.app.ui.theme.ManualLiquid
+import com.fluidreader.app.ui.theme.ManualRim
 import com.fluidreader.app.ui.theme.WarnAmber
 import com.fluidreader.app.vision.model.CupBoundary
 import com.fluidreader.core.measurement.ConfidenceLevel
@@ -105,9 +111,9 @@ fun MeasurementOverlay(
             val rightX = boundary?.let { (it.rightAt(rim ?: it.rimY) + it.rightAt(bottom ?: it.bottomY)) / 2 }
                 ?: (state.frameWidth * 0.7).toInt()
 
-            rim?.let { drawGuideLine(mapper, leftX, rightX, it, CupBlue, "RIM") }
-            bottom?.let { drawGuideLine(mapper, leftX, rightX, it, CupBlue, "BASE") }
-            liquid?.let { drawGuideLine(mapper, leftX, rightX, it, GoodGreen, "LIQUID") }
+            rim?.let { drawGuideLine(mapper, leftX, rightX, it, ManualRim, "TOP") }
+            bottom?.let { drawGuideLine(mapper, leftX, rightX, it, ManualBase, "BOTTOM") }
+            liquid?.let { drawGuideLine(mapper, leftX, rightX, it, ManualLiquid, "FILL") }
         } else if (boundary != null) {
             val topLeft = mapper.map(topLeftX, rimY)
             val topRight = mapper.map(topRightX, rimY)
@@ -148,7 +154,7 @@ private fun DrawScope.drawGuideLine(
     rightX: Int,
     y: Int,
     color: Color,
-    @Suppress("UNUSED_PARAMETER") label: String,
+    label: String,
 ) {
     val left = mapper.map(leftX, y)
     val right = mapper.map(rightX, y)
@@ -162,6 +168,29 @@ private fun DrawScope.drawGuideLine(
     // Drag-handle dots at both ends make the interactive line more discoverable.
     drawCircle(color = color, radius = 14f, center = Offset(left.x, left.y))
     drawCircle(color = color, radius = 14f, center = Offset(right.x, right.y))
+
+    // Name the line right where it ends, so which of the three (top/bottom/fill) you're
+    // looking at - and which one you're about to drag - never has to be guessed from color
+    // alone. A dark outline behind the text keeps it legible over any background.
+    val paint = labelPaint(color.toArgb())
+    val textWidth = paint.measureText(label)
+    val labelX = (right.x + 20f).coerceAtMost(size.width - textWidth - 8f)
+    val labelY = right.y + paint.textSize / 3f
+    val outlinePaint = labelPaint(android.graphics.Color.BLACK).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 6f
+    }
+    drawContext.canvas.nativeCanvas.apply {
+        drawText(label, labelX, labelY, outlinePaint)
+        drawText(label, labelX, labelY, paint)
+    }
+}
+
+private fun labelPaint(argb: Int) = Paint().apply {
+    color = argb
+    textSize = 40f
+    isAntiAlias = true
+    typeface = Typeface.DEFAULT_BOLD
 }
 
 private fun nearestManualLine(state: MeasurementUiState, mapper: CoordinateMapper, screenPoint: Offset): ManualLineType? {

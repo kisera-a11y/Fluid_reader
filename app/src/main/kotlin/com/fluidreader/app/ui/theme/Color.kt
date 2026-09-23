@@ -14,6 +14,12 @@ val GoodGreen = Color(0xFF34D399) // HIGH confidence, success states
 val WarnAmber = Color(0xFFFBBF24) // MEDIUM confidence, caution
 val BadRed = Color(0xFFF87171) // LOW confidence, errors
 
+// Manual-adjust drag lines: three distinct hues (none reused from the confidence colors above)
+// so the rim/base/liquid lines can't be confused with each other at a glance.
+val ManualRim = Color(0xFF60A5FA) // TOP line
+val ManualBase = Color(0xFFC084FC) // BOTTOM line
+val ManualLiquid = Color(0xFFFACC15) // FILL line
+
 // Kept as aliases for any older call sites still referencing the original names.
 val CupBlue = AquaPrimary
 val CupBlueDim = AquaPrimaryDim
