@@ -48,6 +48,7 @@ class MeasurementViewModel(application: Application) : AndroidViewModel(applicat
     private var consecutiveGoodFrames = 0
     private var consecutiveMissedFrames = 0
     private var hasEverMeasured = false
+    private var hasPublishedSinceAcquire = false
     private var lastDisplayedNumberAtMs = 0L
 
     @Volatile private var currentSettings: AppSettings = AppSettings()
@@ -97,6 +98,7 @@ class MeasurementViewModel(application: Application) : AndroidViewModel(applicat
             }
             consecutiveGoodFrames = 0
             hasEverMeasured = false
+            hasPublishedSinceAcquire = false
             lastDisplayedNumberAtMs = 0L
             smoother.reset()
             recentRawVolumes.clear()
@@ -114,7 +116,6 @@ class MeasurementViewModel(application: Application) : AndroidViewModel(applicat
         }
 
         consecutiveMissedFrames = 0
-        val isFirstMeasurement = !hasEverMeasured
         hasEverMeasured = true
         consecutiveGoodFrames++
         val rawVolume = VolumeCalculator.volumeOzAtFraction(currentCupProfile, result.heightFraction)
@@ -145,11 +146,24 @@ class MeasurementViewModel(application: Application) : AndroidViewModel(applicat
         // is held along with the number - not just volumeOz - so a transient low-confidence frame
         // can't flip the button-hiding BELOW_CONFIDENCE_THRESHOLD state on and off faster than the
         // number itself changes; otherwise the Log button could still flicker even with a frozen
-        // number showing. The very first reading after acquiring a cup is shown immediately rather
-        // than held, so there's no artificial delay before a number appears at all.
+        // number showing.
+        //
+        // The very first reading after acquiring a cup still appears quickly rather than waiting
+        // out the full hold, but not on the very first frame: a single-shot object detector can
+        // occasionally return a wobbly bounding box for one frame, which can shift the rim/base
+        // search bands enough to read the cup as if it were upside down for that frame alone.
+        // Showing frame one raw (median of a single sample = itself, no averaging) would flash
+        // that outlier before self-correcting. Waiting for FIRST_PUBLISH_MIN_FRAMES lets the
+        // rolling median actually do its job - the median of 3 samples throws out a single bad
+        // one entirely rather than blending it in - at the cost of a barely-noticeable ~300-400ms.
         val now = SystemClock.elapsedRealtime()
-        val publishNewNumber = isFirstMeasurement || now - lastDisplayedNumberAtMs >= DISPLAY_HOLD_MS
-        if (publishNewNumber) lastDisplayedNumberAtMs = now
+        val readyForFirstPublish = !hasPublishedSinceAcquire && consecutiveGoodFrames >= FIRST_PUBLISH_MIN_FRAMES
+        val publishNewNumber = readyForFirstPublish ||
+            (hasPublishedSinceAcquire && now - lastDisplayedNumberAtMs >= DISPLAY_HOLD_MS)
+        if (publishNewNumber) {
+            lastDisplayedNumberAtMs = now
+            hasPublishedSinceAcquire = true
+        }
 
         _uiState.update { current ->
             current.copy(
@@ -210,6 +224,7 @@ class MeasurementViewModel(application: Application) : AndroidViewModel(applicat
         consecutiveGoodFrames = 0
         consecutiveMissedFrames = 0
         hasEverMeasured = false
+        hasPublishedSinceAcquire = false
         lastDisplayedNumberAtMs = 0L
         smoother.reset()
         recentRawVolumes.clear()
@@ -265,5 +280,9 @@ class MeasurementViewModel(application: Application) : AndroidViewModel(applicat
         // Minimum time the displayed reading (number, range, confidence) is held before it's
         // allowed to move to a new value, so there's a real window to react and tap "Log drink".
         private const val DISPLAY_HOLD_MS = 2500L
+        // Consecutive good frames required before the very first reading is shown, so the
+        // rolling median has enough samples to reject a single wobbly-bounding-box outlier
+        // instead of showing it raw.
+        private const val FIRST_PUBLISH_MIN_FRAMES = 3
     }
 }
