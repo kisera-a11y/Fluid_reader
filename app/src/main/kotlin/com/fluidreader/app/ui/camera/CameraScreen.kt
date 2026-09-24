@@ -58,7 +58,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -153,6 +156,13 @@ private fun CameraContent(
     // uiState.volumeOz live from inside onConfirm would log whatever the newest reading happens
     // to be instead of the amount actually shown when you decided to log it.
     var pendingLogVolumeOz by remember { mutableStateOf(0.0) }
+    // Top edge of the bottom panel, in the same pixel space as the overlay Canvas below (both
+    // are direct, full-size children of the same Box). Manual-adjust lines are kept from ever
+    // being placed at or under this - otherwise, framed close to the cup, a line's default
+    // position can end up entirely hidden behind the opaque panel with no way to touch it to
+    // drag it back into view.
+    var bottomPanelTopPx by remember { mutableStateOf(Float.MAX_VALUE) }
+    val manualDragCeilingMarginPx = with(LocalDensity.current) { 12.dp.toPx() }
 
     val cameraController = remember { CameraController(context) }
     val previewView = remember {
@@ -178,6 +188,11 @@ private fun CameraContent(
             MeasurementOverlay(
                 state = uiState,
                 modifier = Modifier.fillMaxSize(),
+                manualDragCeilingPx = if (bottomPanelTopPx < Float.MAX_VALUE) {
+                    bottomPanelTopPx - manualDragCeilingMarginPx
+                } else {
+                    Float.MAX_VALUE
+                },
                 onManualDrag = { line, y -> viewModel.setManualLine(line, y) },
             )
         }
@@ -258,7 +273,9 @@ private fun CameraContent(
                 pendingLogVolumeOz = uiState.volumeOz
                 showLogDialog = true
             },
-            modifier = Modifier.align(Alignment.BottomCenter),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .onGloballyPositioned { coordinates -> bottomPanelTopPx = coordinates.positionInParent().y },
         )
     }
 
@@ -354,6 +371,19 @@ private fun BottomPanel(
                     Icon(Icons.Filled.Check, contentDescription = null, tint = Color.Black, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
                     Text(stringResource(R.string.action_done), color = Color.Black)
+                }
+                // Logging shouldn't require leaving manual mode first: exiting hands control
+                // back to the live auto-tracker, which immediately starts re-measuring and can
+                // overwrite this exact reading before there's a chance to tap Log - so the
+                // manually-set amount has to be logged directly from here instead.
+                Button(
+                    onClick = onLogDrink,
+                    shape = ExtraShapes.Pill,
+                    colors = ButtonDefaults.buttonColors(containerColor = AquaPrimary),
+                ) {
+                    Icon(Icons.Filled.LocalBar, contentDescription = null, tint = Ink0, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.action_log_drink), color = Ink0)
                 }
             } else {
                 OutlinedButton(

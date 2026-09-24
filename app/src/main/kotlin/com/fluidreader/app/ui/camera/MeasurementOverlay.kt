@@ -7,6 +7,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -22,6 +23,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntSize
 import com.fluidreader.app.measurement.ManualLineType
 import com.fluidreader.app.measurement.MeasurementUiState
 import com.fluidreader.app.ui.theme.BadRed
@@ -51,9 +54,30 @@ import kotlin.math.abs
 fun MeasurementOverlay(
     state: MeasurementUiState,
     modifier: Modifier = Modifier,
+    // Screen-space Y (same pixel space as this Canvas) that manual-adjust lines must stay above -
+    // typically the top edge of the bottom panel, minus a small margin. Framed close to the cup,
+    // a line's position can otherwise land entirely behind that opaque panel with no way to touch
+    // it to drag it back into view. Float.MAX_VALUE means "not yet known / no limit".
+    manualDragCeilingPx: Float = Float.MAX_VALUE,
     onManualDrag: (ManualLineType, Int) -> Unit = { _, _ -> },
 ) {
     var draggingLine by remember { mutableStateOf<ManualLineType?>(null) }
+    var canvasSize by remember { mutableStateOf(IntSize.Zero) }
+
+    // Whenever manual mode is (re-)entered, or the safe ceiling/canvas size becomes known, pull
+    // any line that's at or past it back up to the highest reachable point - this is what
+    // actually keeps a close-framed default position from starting out already unreachable.
+    LaunchedEffect(state.manualOverrideEnabled, manualDragCeilingPx, canvasSize, state.frameWidth, state.frameHeight) {
+        if (!state.manualOverrideEnabled) return@LaunchedEffect
+        if (canvasSize.width <= 0 || canvasSize.height <= 0) return@LaunchedEffect
+        if (state.frameWidth <= 0 || state.frameHeight <= 0) return@LaunchedEffect
+        if (manualDragCeilingPx == Float.MAX_VALUE) return@LaunchedEffect
+        val mapper = CoordinateMapper(state.frameWidth, state.frameHeight, canvasSize.width.toFloat(), canvasSize.height.toFloat())
+        val maxFrameY = mapper.screenYToFrameY(manualDragCeilingPx)
+        state.manualRimY?.let { if (it > maxFrameY) onManualDrag(ManualLineType.RIM, maxFrameY) }
+        state.manualBottomY?.let { if (it > maxFrameY) onManualDrag(ManualLineType.BOTTOM, maxFrameY) }
+        state.manualLiquidY?.let { if (it > maxFrameY) onManualDrag(ManualLineType.LIQUID, maxFrameY) }
+    }
 
     // Holds the last real (non-null) boundary/liquid-row so the animation target freezes
     // (rather than retargeting toward zero) during the brief frames where detection drops out,
@@ -75,6 +99,7 @@ fun MeasurementOverlay(
 
     Canvas(
         modifier = modifier
+            .onSizeChanged { canvasSize = it }
             .pointerInput(state.manualOverrideEnabled, state.frameWidth, state.frameHeight) {
                 if (!state.manualOverrideEnabled) return@pointerInput
                 val mapper = CoordinateMapper(state.frameWidth, state.frameHeight, size.width.toFloat(), size.height.toFloat())
@@ -87,7 +112,11 @@ fun MeasurementOverlay(
                 ) { change, _ ->
                     change.consume()
                     val line = draggingLine ?: return@detectDragGestures
-                    val frameY = mapper.screenYToFrameY(change.position.y)
+                    // Clamped so a drag can't push a line back down past the safe ceiling either -
+                    // otherwise it would just re-create the same "hidden behind the panel, can't
+                    // grab it" problem on the next attempt to adjust it.
+                    val clampedY = change.position.y.coerceAtMost(manualDragCeilingPx)
+                    val frameY = mapper.screenYToFrameY(clampedY)
                     onManualDrag(line, frameY)
                 }
             },
