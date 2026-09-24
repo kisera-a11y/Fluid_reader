@@ -1,6 +1,7 @@
 package com.fluidreader.app.measurement
 
 import android.app.Application
+import android.os.SystemClock
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.fluidreader.app.calibration.CupProfileRepository
@@ -47,6 +48,7 @@ class MeasurementViewModel(application: Application) : AndroidViewModel(applicat
     private var consecutiveGoodFrames = 0
     private var consecutiveMissedFrames = 0
     private var hasEverMeasured = false
+    private var lastDisplayedNumberAtMs = 0L
 
     @Volatile private var currentSettings: AppSettings = AppSettings()
     @Volatile private var currentCupProfile: CupProfile = CupProfileRegistry.SOLO_16OZ
@@ -95,6 +97,7 @@ class MeasurementViewModel(application: Application) : AndroidViewModel(applicat
             }
             consecutiveGoodFrames = 0
             hasEverMeasured = false
+            lastDisplayedNumberAtMs = 0L
             smoother.reset()
             recentRawVolumes.clear()
             _uiState.update {
@@ -111,6 +114,7 @@ class MeasurementViewModel(application: Application) : AndroidViewModel(applicat
         }
 
         consecutiveMissedFrames = 0
+        val isFirstMeasurement = !hasEverMeasured
         hasEverMeasured = true
         consecutiveGoodFrames++
         val rawVolume = VolumeCalculator.volumeOzAtFraction(currentCupProfile, result.heightFraction)
@@ -134,14 +138,27 @@ class MeasurementViewModel(application: Application) : AndroidViewModel(applicat
             else -> DisplayState.READY
         }
 
-        _uiState.update {
-            it.copy(
-                displayState = displayState,
-                volumeOz = smoothedVolume,
-                rangeLowOz = range.start,
-                rangeHighOz = range.endInclusive,
-                confidenceLevel = confidenceResult.level,
-                confidenceScore = confidenceResult.score,
+        // The underlying smoother/confidence math still runs every frame above so it's never
+        // stale, but how often that settles into a *new displayed reading* is throttled: without
+        // this, the on-screen number could change every ~125ms as fresh frames come in, which
+        // didn't leave enough time to react and tap "Log drink" before it moved on. displayState
+        // is held along with the number - not just volumeOz - so a transient low-confidence frame
+        // can't flip the button-hiding BELOW_CONFIDENCE_THRESHOLD state on and off faster than the
+        // number itself changes; otherwise the Log button could still flicker even with a frozen
+        // number showing. The very first reading after acquiring a cup is shown immediately rather
+        // than held, so there's no artificial delay before a number appears at all.
+        val now = SystemClock.elapsedRealtime()
+        val publishNewNumber = isFirstMeasurement || now - lastDisplayedNumberAtMs >= DISPLAY_HOLD_MS
+        if (publishNewNumber) lastDisplayedNumberAtMs = now
+
+        _uiState.update { current ->
+            current.copy(
+                displayState = if (publishNewNumber) displayState else current.displayState,
+                volumeOz = if (publishNewNumber) smoothedVolume else current.volumeOz,
+                rangeLowOz = if (publishNewNumber) range.start else current.rangeLowOz,
+                rangeHighOz = if (publishNewNumber) range.endInclusive else current.rangeHighOz,
+                confidenceLevel = if (publishNewNumber) confidenceResult.level else current.confidenceLevel,
+                confidenceScore = if (publishNewNumber) confidenceResult.score else current.confidenceScore,
                 boundary = result.boundary,
                 liquidY = result.liquid?.surfaceY,
                 frameWidth = result.frameWidth,
@@ -193,6 +210,7 @@ class MeasurementViewModel(application: Application) : AndroidViewModel(applicat
         consecutiveGoodFrames = 0
         consecutiveMissedFrames = 0
         hasEverMeasured = false
+        lastDisplayedNumberAtMs = 0L
         smoother.reset()
         recentRawVolumes.clear()
         _uiState.update { it.copy(manualOverrideEnabled = false, displayState = DisplayState.STABILIZING) }
@@ -244,5 +262,8 @@ class MeasurementViewModel(application: Application) : AndroidViewModel(applicat
         // steady) before treating tracking as actually lost. At the analyzer's ~8fps cap this is
         // roughly a one-second grace period.
         private const val MAX_MISS_STREAK = 8
+        // Minimum time the displayed reading (number, range, confidence) is held before it's
+        // allowed to move to a new value, so there's a real window to react and tap "Log drink".
+        private const val DISPLAY_HOLD_MS = 2500L
     }
 }
