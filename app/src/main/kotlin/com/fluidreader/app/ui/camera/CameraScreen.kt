@@ -148,6 +148,11 @@ private fun CameraContent(
     val uiState by viewModel.uiState.collectAsState()
     val drinkLogEntries by drinkLogViewModel.entries.collectAsState()
     var showLogDialog by remember { mutableStateOf(false) }
+    // Frozen at the moment "Log drink" is tapped - the camera keeps re-measuring in the
+    // background the whole time the dialog is open (while you type or speak a name), so reading
+    // uiState.volumeOz live from inside onConfirm would log whatever the newest reading happens
+    // to be instead of the amount actually shown when you decided to log it.
+    var pendingLogVolumeOz by remember { mutableStateOf(0.0) }
 
     val cameraController = remember { CameraController(context) }
     val previewView = remember {
@@ -249,21 +254,24 @@ private fun CameraContent(
             onToggleManual = {
                 if (uiState.manualOverrideEnabled) viewModel.exitManualOverride() else viewModel.enterManualOverride()
             },
-            onLogDrink = { showLogDialog = true },
+            onLogDrink = {
+                pendingLogVolumeOz = uiState.volumeOz
+                showLogDialog = true
+            },
             modifier = Modifier.align(Alignment.BottomCenter),
         )
     }
 
     if (showLogDialog) {
         LogDrinkDialog(
-            currentVolumeOz = uiState.volumeOz,
+            currentVolumeOz = pendingLogVolumeOz,
             units = uiState.units,
             existingNames = drinkLogEntries.map { it.name },
             onDismiss = { showLogDialog = false },
             onConfirm = { name ->
-                drinkLogViewModel.logPour(name, uiState.volumeOz)
+                drinkLogViewModel.logPour(name, pendingLogVolumeOz)
                 showLogDialog = false
-                Toast.makeText(context, "Logged ${uiState.units.format(uiState.volumeOz)} → $name", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Logged ${uiState.units.format(pendingLogVolumeOz)} → $name", Toast.LENGTH_SHORT).show()
             },
         )
     }
