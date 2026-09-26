@@ -72,6 +72,7 @@ fun DrinkLogScreen(
 
     val entries by viewModel.entries.collectAsState()
     val grandTotal by viewModel.grandTotalOz.collectAsState()
+    val logDateEpochMillis by viewModel.logDateEpochMillis.collectAsState()
 
     var expandedNames by remember { mutableStateOf(setOf<String>()) }
     var pendingDeleteName by remember { mutableStateOf<String?>(null) }
@@ -113,7 +114,11 @@ fun DrinkLogScreen(
         } else {
             Column(modifier = Modifier.fillMaxSize().padding(padding)) {
                 Column(modifier = Modifier.fillMaxWidth().padding(20.dp)) {
-                    Text("Total tonight", style = MaterialTheme.typography.bodyMedium, color = TextSecondary)
+                    Text(
+                        logDateEpochMillis?.let { "Total tonight · ${formatDate(context, it)}" } ?: "Total tonight",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TextSecondary,
+                    )
                     Text(units.format(grandTotal), style = MaterialTheme.typography.displaySmall, color = AquaPrimary)
                 }
 
@@ -279,3 +284,6 @@ private fun DrinkLogRow(
 
 private fun formatTime(context: Context, epochMillis: Long): String =
     DateFormat.getTimeFormat(context).format(Date(epochMillis))
+
+private fun formatDate(context: Context, epochMillis: Long): String =
+    DateFormat.getMediumDateFormat(context).format(Date(epochMillis))

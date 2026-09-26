@@ -2,6 +2,7 @@ package com.fluidreader.app.drinklog
 
 import android.content.Context
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -20,6 +21,7 @@ class DrinkLogStore(private val context: Context) {
 
     private object Keys {
         val ENTRIES = stringPreferencesKey("entries")
+        val SESSION_START = longPreferencesKey("session_start_epoch_millis")
     }
 
     // Three levels of separator, all non-printable so they never collide with a typed drink
@@ -33,12 +35,24 @@ class DrinkLogStore(private val context: Context) {
         decode(prefs[Keys.ENTRIES])
     }
 
+    /**
+     * When tonight's log started - the timestamp of the first pour added after the log was last
+     * empty. Kept separate from the entries themselves so it survives individual pours/entries
+     * being deleted around it; only clears (and gets re-set by the next [addPour]) once the log
+     * has been emptied out completely, by whatever combination of [removePour], [removeEntry],
+     * or [clearAll] got it there.
+     */
+    val sessionStartEpochMillis: Flow<Long?> = context.drinkLogDataStore.data.map { prefs ->
+        prefs[Keys.SESSION_START]
+    }
+
     suspend fun addPour(name: String, ounces: Double) {
         val trimmedName = name.trim()
         if (trimmedName.isEmpty() || ounces <= 0.0) return
 
         context.drinkLogDataStore.edit { prefs ->
             val current = decode(prefs[Keys.ENTRIES]).toMutableList()
+            val wasEmpty = current.isEmpty()
             val existingIndex = current.indexOfFirst { it.name.equals(trimmedName, ignoreCase = true) }
             val newPour = DrinkPour(ounces, System.currentTimeMillis())
 
@@ -49,6 +63,7 @@ class DrinkLogStore(private val context: Context) {
                 current.add(DrinkLogEntry(trimmedName, listOf(newPour)))
             }
             prefs[Keys.ENTRIES] = encode(current)
+            if (wasEmpty) prefs[Keys.SESSION_START] = newPour.loggedAtEpochMillis
         }
     }
 
@@ -65,6 +80,7 @@ class DrinkLogStore(private val context: Context) {
                     current[index] = current[index].copy(pours = remainingPours)
                 }
                 prefs[Keys.ENTRIES] = encode(current)
+                if (current.isEmpty()) prefs.remove(Keys.SESSION_START)
             }
         }
     }
@@ -73,11 +89,15 @@ class DrinkLogStore(private val context: Context) {
         context.drinkLogDataStore.edit { prefs ->
             val current = decode(prefs[Keys.ENTRIES]).filterNot { it.name.equals(name, ignoreCase = true) }
             prefs[Keys.ENTRIES] = encode(current)
+            if (current.isEmpty()) prefs.remove(Keys.SESSION_START)
         }
     }
 
     suspend fun clearAll() {
-        context.drinkLogDataStore.edit { prefs -> prefs[Keys.ENTRIES] = "" }
+        context.drinkLogDataStore.edit { prefs ->
+            prefs[Keys.ENTRIES] = ""
+            prefs.remove(Keys.SESSION_START)
+        }
     }
 
     private fun encode(entries: List<DrinkLogEntry>): String =
