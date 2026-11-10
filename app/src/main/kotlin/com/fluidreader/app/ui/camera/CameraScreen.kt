@@ -76,6 +76,7 @@ import com.fluidreader.app.drinklog.DrinkLogViewModel
 import com.fluidreader.app.measurement.DisplayState
 import com.fluidreader.app.measurement.MeasurementUiState
 import com.fluidreader.app.measurement.MeasurementViewModel
+import com.fluidreader.app.ui.drinklog.BarNameDialog
 import com.fluidreader.app.ui.drinklog.LogDrinkDialog
 import com.fluidreader.app.ui.theme.AquaPrimary
 import com.fluidreader.app.ui.theme.BadRed
@@ -150,6 +151,7 @@ private fun CameraContent(
     val lifecycleOwner = LocalLifecycleOwner.current
     val uiState by viewModel.uiState.collectAsState()
     val drinkLogEntries by drinkLogViewModel.entries.collectAsState()
+    val needsBarPrompt by drinkLogViewModel.needsBarPrompt.collectAsState()
     var showLogDialog by remember { mutableStateOf(false) }
     // Frozen at the moment "Log drink" is tapped - the camera keeps re-measuring in the
     // background the whole time the dialog is open (while you type or speak a name), so reading
@@ -290,6 +292,15 @@ private fun CameraContent(
                 showLogDialog = false
                 Toast.makeText(context, "Logged ${uiState.units.format(pendingLogVolumeOz)} → $name", Toast.LENGTH_SHORT).show()
             },
+        )
+    }
+
+    // Shown once, right after the first pour starts a new log (never while the "Log drink"
+    // dialog above is also open, so the two never stack).
+    if (needsBarPrompt && !showLogDialog) {
+        BarNameDialog(
+            onSkip = { drinkLogViewModel.setBarName(null) },
+            onSave = { name -> drinkLogViewModel.setBarName(name) },
         )
     }
 }

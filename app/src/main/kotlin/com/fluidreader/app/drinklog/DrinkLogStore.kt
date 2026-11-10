@@ -1,6 +1,7 @@
 package com.fluidreader.app.drinklog
 
 import android.content.Context
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -22,6 +23,8 @@ class DrinkLogStore(private val context: Context) {
     private object Keys {
         val ENTRIES = stringPreferencesKey("entries")
         val SESSION_START = longPreferencesKey("session_start_epoch_millis")
+        val BAR_NAME = stringPreferencesKey("bar_name")
+        val BAR_PROMPTED = booleanPreferencesKey("bar_prompted")
     }
 
     // Three levels of separator, all non-printable so they never collide with a typed drink
@@ -44,6 +47,33 @@ class DrinkLogStore(private val context: Context) {
      */
     val sessionStartEpochMillis: Flow<Long?> = context.drinkLogDataStore.data.map { prefs ->
         prefs[Keys.SESSION_START]
+    }
+
+    /** The bar this log is for, if the user entered one - optional, blank by default. */
+    val barName: Flow<String?> = context.drinkLogDataStore.data.map { prefs ->
+        prefs[Keys.BAR_NAME]
+    }
+
+    /**
+     * Whether the "which bar?" prompt has already been shown (and answered, or explicitly
+     * skipped) for the current log. Separate from [barName] itself so a blank answer doesn't
+     * look the same as "never asked" and trigger the prompt again on every pour.
+     */
+    val barPrompted: Flow<Boolean> = context.drinkLogDataStore.data.map { prefs ->
+        prefs[Keys.BAR_PROMPTED] ?: false
+    }
+
+    /** Records the bar prompt's answer - a blank/null [name] just records that it was skipped. */
+    suspend fun setBarName(name: String?) {
+        context.drinkLogDataStore.edit { prefs ->
+            val trimmed = name?.trim()
+            if (trimmed.isNullOrEmpty()) {
+                prefs.remove(Keys.BAR_NAME)
+            } else {
+                prefs[Keys.BAR_NAME] = trimmed
+            }
+            prefs[Keys.BAR_PROMPTED] = true
+        }
     }
 
     suspend fun addPour(name: String, ounces: Double) {
@@ -80,7 +110,11 @@ class DrinkLogStore(private val context: Context) {
                     current[index] = current[index].copy(pours = remainingPours)
                 }
                 prefs[Keys.ENTRIES] = encode(current)
-                if (current.isEmpty()) prefs.remove(Keys.SESSION_START)
+                if (current.isEmpty()) {
+                    prefs.remove(Keys.SESSION_START)
+                    prefs.remove(Keys.BAR_NAME)
+                    prefs.remove(Keys.BAR_PROMPTED)
+                }
             }
         }
     }
@@ -89,7 +123,11 @@ class DrinkLogStore(private val context: Context) {
         context.drinkLogDataStore.edit { prefs ->
             val current = decode(prefs[Keys.ENTRIES]).filterNot { it.name.equals(name, ignoreCase = true) }
             prefs[Keys.ENTRIES] = encode(current)
-            if (current.isEmpty()) prefs.remove(Keys.SESSION_START)
+            if (current.isEmpty()) {
+                prefs.remove(Keys.SESSION_START)
+                prefs.remove(Keys.BAR_NAME)
+                prefs.remove(Keys.BAR_PROMPTED)
+            }
         }
     }
 
@@ -97,6 +135,8 @@ class DrinkLogStore(private val context: Context) {
         context.drinkLogDataStore.edit { prefs ->
             prefs[Keys.ENTRIES] = ""
             prefs.remove(Keys.SESSION_START)
+            prefs.remove(Keys.BAR_NAME)
+            prefs.remove(Keys.BAR_PROMPTED)
         }
     }
 

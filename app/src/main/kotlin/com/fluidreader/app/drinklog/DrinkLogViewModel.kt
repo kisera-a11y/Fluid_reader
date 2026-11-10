@@ -35,6 +35,23 @@ class DrinkLogViewModel(application: Application) : AndroidViewModel(application
         stored ?: list.flatMap { it.pours }.minOfOrNull { it.loggedAtEpochMillis }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    /** The bar this log is for, if one was entered - optional, null until answered. */
+    val barName: StateFlow<String?> = store.barName
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /**
+     * True right after the first pour of a new log, until the "which bar?" prompt has been
+     * answered (or explicitly skipped) once for it - then false for the rest of this log's life,
+     * even though [barName] itself may still be null (skipped is a valid, final answer).
+     */
+    val needsBarPrompt: StateFlow<Boolean> = combine(entries, store.barPrompted) { list, prompted ->
+        list.isNotEmpty() && !prompted
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    fun setBarName(name: String?) {
+        viewModelScope.launch { store.setBarName(name) }
+    }
+
     fun logPour(name: String, ounces: Double) {
         viewModelScope.launch { store.addPour(name, ounces) }
     }
